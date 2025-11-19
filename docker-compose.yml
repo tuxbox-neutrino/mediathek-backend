@@ -1,0 +1,47 @@
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: example-root
+      MARIADB_DATABASE: mediathek_1
+      MARIADB_USER: neutrino
+      MARIADB_PASSWORD: neutrino
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  importer:
+    build:
+      context: .
+      dockerfile: docker/importer/Dockerfile
+    depends_on:
+      - db
+    environment:
+      - IMPORTER_HOME=/opt/importer
+    volumes:
+      - ./config/importer:/opt/importer/config
+      - ./data/importer:/opt/importer/bin/dl
+    command: ["--cron-mode", "120"]
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    depends_on:
+      - db
+    environment:
+      - API_HOME=/opt/api
+      - MT_API_DB_HOST=db
+    volumes:
+      - api_data:/opt/api/data
+      - api_log:/opt/api/log
+      - ./config/api:/opt/api/config
+    ports:
+      - "18080:8080"
+
+volumes:
+  db_data:
+  api_data:
+  api_log:

@@ -1,0 +1,60 @@
+name: Build Docker Images
+
+on:
+  # Manual trigger only for now; keep disabled for automatic pushes.
+  workflow_dispatch:
+
+env:
+  IMPORTER_IMAGE: dbt1/mediathek-importer
+  API_IMAGE: dbt1/mt-api-dev
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Fetch vendor sources
+        run: |
+          make vendor
+          for repo in db-import mt-api-dev; do
+            git -C "vendor/${repo}" fetch origin --tags --force
+          done
+
+      - name: Determine versions
+        id: versions
+        run: |
+          set -euo pipefail
+          IMPORTER_VERSION=$(grep -Po '(?<=VERSION=")[^"]+' vendor/db-import/VERSION)
+          API_VERSION=$(git -C vendor/mt-api-dev describe --tags --abbrev=0 2>/dev/null || git -C vendor/mt-api-dev rev-parse --short HEAD)
+          echo "importer=${IMPORTER_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "api=${API_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push importer image
+        run: |
+          docker buildx build --platform linux/amd64,linux/arm64 \
+            -t "${IMPORTER_IMAGE}:${{ steps.versions.outputs.importer }}" \
+            -t "${IMPORTER_IMAGE}:latest" \
+            -f docker/importer/Dockerfile \
+            --push .
+
+      - name: Build & push API image
+        run: |
+          docker buildx build --platform linux/amd64,linux/arm64 \
+            -t "${API_IMAGE}:${{ steps.versions.outputs.api }}" \
+            -t "${API_IMAGE}:latest" \
+            -f docker/api/Dockerfile \
+            --push .

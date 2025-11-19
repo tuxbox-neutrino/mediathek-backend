@@ -1,0 +1,126 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mediathek Backend <noreply@example.com>
+Date: Mon, 3 Nov 2025 00:00:00 +0000
+Subject: [PATCH] Allow configuring MariaDB host
+
+Introduce a new `mysqlHost` setting in `mv2mariadb.conf` so the importer can
+connect to a database running on a different host. The original code assumed a
+local instance on `127.0.0.1`, which is no longer true when running inside
+containers. The host string defaults to the old behaviour if the setting is not
+present.
+---
+ src/mv2mariadb.cpp | 9 +++++++--
+ src/sql.cpp        | 7 +++++--
+ src/types.h        | 1 +
+ 3 files changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/src/mv2mariadb.cpp b/src/mv2mariadb.cpp
+index 5a31c69..6bcd92e 100644
+--- a/src/mv2mariadb.cpp
++++ b/src/mv2mariadb.cpp
+@@ -55,6 +55,7 @@ CMV2Mysql*		g_mainInstance;
+ GSettings		g_settings;
+ bool			g_debugPrint;
+ const char*		g_progName;
+ const char*		g_progCopyright;
+ const char*		g_progVersion;
+ const char*		g_dbVersion;
+ string			g_mvVersion;
+ time_t			g_mvDate;
+ string			g_passwordFile;
++string			g_mysqlHost;
+ 
+ void myExit(int val);
+ 
+@@ -182,6 +183,7 @@ int CMV2Mysql::loadSetup(string fname)
+ 	g_settings.videoDb_TableInfo		= configFile.getString("videoDb_TableInfo",        "channelinfo");
+ 	g_settings.videoDb_TableVersion		= configFile.getString("videoDb_TableVersion",     "version");
+ 	VIDEO_DB_TMP_1				= g_settings.videoDbTmp1;
+ 	VIDEO_DB				= g_settings.videoDb;
+ 	if (g_settings.testMode) {
+ 		VIDEO_DB_TMP_1	+= g_settings.testLabel;
+ 		VIDEO_DB	+= g_settings.testLabel;
+ 	}
+@@ -198,6 +200,7 @@ int CMV2Mysql::loadSetup(string fname)
+ 	g_settings.passwordFile		= configFile.getString("passwordFile",         "pw_mariadb");
+ 
+ 	/* server list */
+ 	g_settings.serverListUrl	 = configFile.getString("serverListUrl",               "https://res.mediathekview.de/akt.xml");
+ 	g_settings.serverListLastRefresh = (time_t)configFile.getInt64("serverListLastRefresh", 0);
+ 	g_settings.serverListRefreshDays = configFile.getInt32("serverListRefreshDays",         7);
++	g_settings.mysqlHost		= configFile.getString("mysqlHost", "127.0.0.1");
+ 
+ 	if (erg)
+ 		configFile.setModifiedFlag(true);
+@@ -229,6 +232,7 @@ void CMV2Mysql::saveSetup(string fname, bool quiet/*=false*/)
+ 	configFile.setString("videoDb_TableInfo",        g_settings.videoDb_TableInfo);
+ 	configFile.setString("videoDb_TableVersion",     g_settings.videoDb_TableVersion);
+ 
+ 	/* download server */
+ 	saveDownloadServerSetup();
+ 
+ 	/* password file */
+ 	configFile.setString("passwordFile",         g_settings.passwordFile);
++	configFile.setString("mysqlHost",            g_settings.mysqlHost);
+ 
+ 	/* server list */
+ 	configFile.setString("serverListUrl",         g_settings.serverListUrl);
+@@ -349,8 +353,9 @@ int CMV2Mysql::main(int argc, char* argv[])
+ 
+ 	/* set name for passwordFile */
+ 	if ((g_settings.passwordFile)[0] == '/')
+ 		g_passwordFile = g_settings.passwordFile;
+ 	else
+ 		g_passwordFile = path0 + "/" + g_settings.passwordFile;
++	g_mysqlHost = g_settings.mysqlHost;
+ 
+ 	csql = new CSql();
+ 	multiQuery = csql->multiQuery;
+@@ -512,7 +517,7 @@ int CMV2Mysql::main(int argc, char* argv[])
+ 
+ 	csql->connectMysql();
+ 	csql->checkTemplateDB(templateDBFile);
+ 	parseDB();
+ 
+ 	return 0;
+diff --git a/src/sql.cpp b/src/sql.cpp
+index 88ef4da..4367a13 100644
+--- a/src/sql.cpp
++++ b/src/sql.cpp
+@@ -44,6 +44,7 @@
+ 
+ extern CMV2Mysql*		g_mainInstance;
+ extern string			g_passwordFile;
++extern string			g_mysqlHost;
+ extern GSettings		g_settings;
+ extern bool			g_debugPrint;
+ extern const char*		g_progName;
+@@ -111,8 +112,10 @@ bool CSql::connectMysql()
+ 	if (mysql_optionsv(mysqlCon, MYSQL_OPT_MAX_ALLOWED_PACKET, (const void*)(&maxAllowedPacket)) != 0)
+ 		show_error(__func__, __LINE__);
+ 
++	const char* host = g_mysqlHost.empty() ? "127.0.0.1" : g_mysqlHost.c_str();
++
+ 	unsigned long flags = 0;
+ 	if (multiQuery)
+ 		flags |= CLIENT_MULTI_STATEMENTS;
+ //	flags |= CLIENT_COMPRESS;
+-	if (!mysql_real_connect(mysqlCon, "127.0.0.1", sqlUser.c_str(), sqlPW.c_str(), NULL, 3306, NULL, flags))
++	if (!mysql_real_connect(mysqlCon, host, sqlUser.c_str(), sqlPW.c_str(), NULL, 3306, NULL, flags))
+ 		show_error(__func__, __LINE__);
+ 
+diff --git a/src/types.h b/src/types.h
+index a17df7f..8db4c6e 100644
+--- a/src/types.h
++++ b/src/types.h
+@@ -69,6 +69,7 @@ struct GSettings
+ 	string videoDb_TableVideo;
+ 	string videoDb_TableInfo;
+ 	string videoDb_TableVersion;
++	string mysqlHost;
+ 
+ 	/* download server */
+ 	string downloadServer[maxDownloadServerCount];
+-- 
+2.45.0
+

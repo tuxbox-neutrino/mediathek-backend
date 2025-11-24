@@ -30,7 +30,17 @@ making future updates trivial.
 
 ## Getting Started
 
+> Prefer a one-shot helper? The
+> [mt-api-dev repository](https://github.com/tuxbox-neutrino/mt-api-dev) ships
+> [scripts/quickstart.sh](https://github.com/tuxbox-neutrino/mt-api-dev/blob/master/scripts/quickstart.sh)
+> which clones this backend, pulls the vendor repos and boots the compose stack
+automatically.
+
 ```bash
+# Clone this repository (includes the docker-compose setup)
+git clone https://github.com/tuxbox-neutrino/mediathek-backend.git
+cd mediathek-backend
+
 # Clone the upstream importer/API repositories (once)
 make vendor
 

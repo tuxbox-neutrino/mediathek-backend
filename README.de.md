@@ -31,7 +31,17 @@ lassen sich jederzeit nachziehen.
 
 ## Erste Schritte
 
+> Komfortabler geht es mit dem
+> [mt-api-dev-Repository](https://github.com/tuxbox-neutrino/mt-api-dev):
+> [Quickstart-Skript](https://github.com/tuxbox-neutrino/mt-api-dev/blob/master/scripts/quickstart.sh):
+> Es klont dieses Backend, zieht die Vendor-Repos und startet
+> das Compose-Setup automatisch.
+
 ```bash
+# Dieses Repository (Compose-Setup) klonen
+git clone https://github.com/tuxbox-neutrino/mediathek-backend.git
+cd mediathek-backend
+
 # Upstream-Repositories für Importer & API klonen (einmalig)
 make vendor
 

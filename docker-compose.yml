@@ -22,7 +22,7 @@ services:
       - IMPORTER_HOME=/opt/importer
     volumes:
       - ./config/importer:/opt/importer/config
-      - ./data/importer:/opt/importer/bin/dl
+      - importer_dl:/opt/importer/bin/dl
     command: ["--cron-mode", "120"]
 
   api:
@@ -43,5 +43,10 @@ services:
 
 volumes:
   db_data:
+    name: mediathek-backend_mariadb
   api_data:
+    name: mediathek-backend_mt-api-data
   api_log:
+    name: mediathek-backend_mt-api-log
+  importer_dl:
+    name: mediathek-backend_db-import

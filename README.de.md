@@ -157,14 +157,14 @@ IMPORTER_VERSION=$(git -C vendor/db-import describe --tags --long --abbrev=7)
 API_VERSION=$(git -C vendor/mt-api-dev describe --tags --long --abbrev=7)
 
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t dbt1/mediathek-importer:${IMPORTER_VERSION} \
-  -t dbt1/mediathek-importer:latest \
+  -t <YOUR_ACCOUNT_NAME>/mediathek-importer:${IMPORTER_VERSION} \
+  -t <YOUR_ACCOUNT_NAME>/mediathek-importer:latest \
   -f docker/importer/Dockerfile \
   --push .
 
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t dbt1/mt-api-dev:${API_VERSION} \
-  -t dbt1/mt-api-dev:latest \
+  -t <YOUR_ACCOUNT_NAME>/mt-api-dev:${API_VERSION} \
+  -t <YOUR_ACCOUNT_NAME>/mt-api-dev:latest \
   -f docker/api/Dockerfile \
   --push .
 ```

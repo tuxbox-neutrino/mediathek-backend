@@ -55,7 +55,7 @@ result: MariaDB + Importer + API in Docker containers with named volumes.
 Use this whenever you just want a working backend on one host.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tuxbox-neutrino/mt-api-dev/master/scripts/quickstart.sh -o quickstart.sh
+curl -fsSL https://raw.githubusercontent.com/tuxbox-neutrino/mediathek-backend/master/scripts/quickstart.sh -o quickstart.sh
 chmod +x quickstart.sh
 ./quickstart.sh
 ```
@@ -237,7 +237,7 @@ docker compose logs -f importer api db
 - **API specific docs** – [`vendor/mt-api-dev/README.en.md`](vendor/mt-api-dev/README.en.md)
   (FastCGI endpoints, configuration variables).
 - **Quickstart script** – described inside
-  [`vendor/mt-api-dev/scripts/quickstart.sh`](vendor/mt-api-dev/scripts/quickstart.sh)
+  [`scripts/quickstart.sh`](scripts/quickstart.sh)
   and referenced above.
 
 If you update any operational detail, please edit this README first so users

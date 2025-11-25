@@ -51,8 +51,8 @@ Einsteiger) oder den **manuellen Compose-Weg** (mehr Kontrolle).
 
 ### Quickstart-Skript
 
-```
-curl -fsSL https://raw.githubusercontent.com/tuxbox-neutrino/mt-api-dev/master/scripts/quickstart.sh -o quickstart.sh
+```bash
+curl -fsSL https://raw.githubusercontent.com/tuxbox-neutrino/mediathek-backend/master/scripts/quickstart.sh -o quickstart.sh
 chmod +x quickstart.sh
 ./quickstart.sh
 ```
@@ -197,7 +197,7 @@ docker compose logs -f importer api db
 - **Importer-Doku**: [`vendor/db-import/README.de.md`](vendor/db-import/README.de.md)
 - **API-Doku**: [`vendor/mt-api-dev/README.de.md`](vendor/mt-api-dev/README.de.md)
 - **Quickstart-Skript**:
-  [`vendor/mt-api-dev/scripts/quickstart.sh`](vendor/mt-api-dev/scripts/quickstart.sh)
+  [`scripts/quickstart.sh`](scripts/quickstart.sh)
 
 Bitte Änderungen am Betrieb zuerst hier dokumentieren – so haben Anwender eine
 einheitliche Anlaufstelle.

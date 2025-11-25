@@ -194,10 +194,12 @@ docker compose logs -f importer api db
 
 ## Weitere Informationen
 
-- **Importer-Doku**: [`vendor/db-import/README.de.md`](vendor/db-import/README.de.md)
-- **API-Doku**: [`vendor/mt-api-dev/README.de.md`](vendor/mt-api-dev/README.de.md)
+- **Importer-Doku**:
+  [`vendor/db-import/README.de.md`](https://github.com/tuxbox-neutrino/mediathek-backend/blob/master/vendor/db-import/README.de.md)
+- **API-Doku**:
+  [`vendor/mt-api-dev/README.de.md`](https://github.com/tuxbox-neutrino/mediathek-backend/blob/master/vendor/mt-api-dev/README.de.md)
 - **Quickstart-Skript**:
-  [`scripts/quickstart.sh`](scripts/quickstart.sh)
+  [`scripts/quickstart.sh`](https://github.com/tuxbox-neutrino/mediathek-backend/blob/master/scripts/quickstart.sh)
 
 Bitte Änderungen am Betrieb zuerst hier dokumentieren – so haben Anwender eine
 einheitliche Anlaufstelle.

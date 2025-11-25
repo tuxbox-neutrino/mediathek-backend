@@ -232,12 +232,14 @@ docker compose logs -f importer api db
 
 ## Where to find more details
 
-- **Importer specific docs** – [`vendor/db-import/README.en.md`](vendor/db-import/README.en.md)
+- **Importer specific docs** –
+  [`vendor/db-import/README.en.md`](https://github.com/tuxbox-neutrino/mediathek-backend/blob/master/vendor/db-import/README.en.md)
   (build flags, CLI options, data format).
-- **API specific docs** – [`vendor/mt-api-dev/README.en.md`](vendor/mt-api-dev/README.en.md)
+- **API specific docs** –
+  [`vendor/mt-api-dev/README.en.md`](https://github.com/tuxbox-neutrino/mediathek-backend/blob/master/vendor/mt-api-dev/README.en.md)
   (FastCGI endpoints, configuration variables).
 - **Quickstart script** – described inside
-  [`scripts/quickstart.sh`](scripts/quickstart.sh)
+  [`scripts/quickstart.sh`](https://github.com/tuxbox-neutrino/mediathek-backend/blob/master/scripts/quickstart.sh)
   and referenced above.
 
 If you update any operational detail, please edit this README first so users

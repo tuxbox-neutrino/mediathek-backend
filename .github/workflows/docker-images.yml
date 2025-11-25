@@ -38,8 +38,8 @@ jobs:
         id: versions
         run: |
           set -euo pipefail
-          IMPORTER_VERSION=$(grep -Po '(?<=VERSION=")[^"]+' vendor/db-import/VERSION)
-          API_VERSION=$(git -C vendor/mt-api-dev describe --tags --abbrev=0 2>/dev/null || git -C vendor/mt-api-dev rev-parse --short HEAD)
+          IMPORTER_VERSION=$(git -C vendor/db-import describe --tags --long --abbrev=7 2>/dev/null || git -C vendor/db-import rev-parse --short HEAD)
+          API_VERSION=$(git -C vendor/mt-api-dev describe --tags --long --abbrev=7 2>/dev/null || git -C vendor/mt-api-dev rev-parse --short HEAD)
           echo "importer=${IMPORTER_VERSION}" >> "$GITHUB_OUTPUT"
           echo "api=${API_VERSION}" >> "$GITHUB_OUTPUT"
 

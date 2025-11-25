@@ -1,133 +1,202 @@
-# Mediathek Backend Sandbox
+# Mediathek Backend
 
-This directory is a fresh sandbox to rebuild the former Coolithek backend
-under our own control. It is composed of three building blocks:
+End-to-end environment to run the Neutrino Mediathek backend yourself. It
+contains everything that used to live on the Coolithek servers:
 
-1. **MariaDB** – stores the normalized MediathekView data.
-2. **Importer (`mv2mariadb`)** – downloads the movie list from
-   `res.mediathekview.de`, converts it and updates the database.
-3. **API (`mt-api`)** – exposes the JSON/HTML endpoints consumed by the
-   Neutrino Mediathek plugin.
+1. **MariaDB** – persistent storage for the MediathekView catalogue.
+2. **Importer (`mv2mariadb`)** – downloads the movie lists and fills MariaDB.
+3. **API (`mt-api`)** – the FastCGI/HTTP endpoints consumed by the Neutrino
+   plugin.
 
-The previously operated infrastructure is no longer available; credentials and
-servers cannot be used. This sandbox packages the components into containers so
-they can be tested locally and later published via GitHub Actions.
+This repository keeps the glue code (Dockerfiles, compose file, docs). The
+actual importer and API sources live in the `vendor/` directory.
 
-## Layout
+---
+
+## Table of contents
+
+1. [What is included?](#what-is-included)
+2. [Pick your setup path](#pick-your-setup-path)
+   - [Quickstart script (single command)](#quickstart-script-single-command)
+   - [Manual compose path](#manual-compose-path)
+   - [Verifying & configuring the plugin](#verifying--configuring-the-plugin)
+3. [Daily operation](#daily-operation)
+4. [Building & publishing Docker images](#building--publishing-docker-images)
+5. [Repository layout & developer notes](#repository-layout--developer-notes)
+6. [Where to find more details](#where-to-find-more-details)
+
+---
+
+## What is included?
 
 ```
-.
-├── Makefile              # helpers to mirror the upstream repositories
-├── docker/               # Dockerfiles & entrypoints for importer/API
-├── docker-compose.yml    # local compose stack (work in progress)
-├── docs/                 # WIP notes
-└── vendor/               # (gitignored) clones of mt-api-dev & db-import
+mediathek-backend/
+├── docker/               # Dockerfiles & entrypoints for importer + API
+├── docker-compose.yml    # ready-to-use stack
+├── vendor/
+│   ├── db-import         # mv2mariadb (cloned via `make vendor`)
+│   └── mt-api-dev        # API sources (same)
+└── config/, data/        # runtime configs & persistent data
 ```
 
-The upstream projects are not committed to this repository. Instead, run
-`make vendor` to clone them into `vendor/`, keeping their histories intact and
-making future updates trivial.
+The repository does **not** commit the third-party source trees. Run
+`make vendor` once to clone them into `vendor/…`.
 
-## Getting Started
+---
 
-> Prefer a one-shot helper? The
-> [mt-api-dev repository](https://github.com/tuxbox-neutrino/mt-api-dev) ships
-> [scripts/quickstart.sh](https://github.com/tuxbox-neutrino/mt-api-dev/blob/master/scripts/quickstart.sh)
-> which clones this backend, pulls the vendor repos and boots the compose stack
-automatically.
+## Pick your setup path
+
+Most users either run the **interactive quickstart script** (all-in-one
+workflow) or manage the stack via **docker compose**. Both land at the same
+result: MariaDB + Importer + API in Docker containers with named volumes.
+
+### Quickstart script (single command)
+
+Use this whenever you just want a working backend on one host.
 
 ```bash
-# Clone this repository (includes the docker-compose setup)
+curl -fsSL https://raw.githubusercontent.com/tuxbox-neutrino/mt-api-dev/master/scripts/quickstart.sh -o quickstart.sh
+chmod +x quickstart.sh
+./quickstart.sh
+```
+
+The helper will:
+
+1. Pull the current importer/API images.
+2. Start a local MariaDB container (`mediathek-db`).
+3. Ask for DB credentials (defaults `root/example-root` for tests).
+4. Create config files in `config/importer/` and `config/api/`.
+5. Run the importer twice (`--update`, `--force-convert`).
+6. Launch long-running importer (`--cron-mode`) and API containers.
+
+The script prints the URL of the API (`http://localhost:18080/mt-api`) at the
+end. To stop/remove everything later:
+
+```bash
+docker rm -f mediathek-api mediathek-importer mediathek-db
+docker volume rm mediathek-backend_mt-api-data mediathek-backend_mt-api-log mediathek-backend_db-import mediathek-backend_mariadb
+```
+
+### Manual compose path
+
+Need more control or want to hack on the sources? Clone this repository and
+bring the stack up manually.
+
+```bash
+# 1) Get the repo + vendor sources
 git clone https://github.com/tuxbox-neutrino/mediathek-backend.git
 cd mediathek-backend
+make vendor          # clones vendor/db-import + vendor/mt-api-dev
 
-# Clone the upstream importer/API repositories (once)
-make vendor
+# 2) Start MariaDB (persistent volume: mediathek-backend_db_data)
+docker compose up -d db
 
-# Start MariaDB (persistent volume: docker volume mediathek-backend_db_data)
-docker-compose up -d db
+# 3) Build importer & API images from the checked-out sources
+docker compose build importer api
 
-# Build the importer image
-docker-compose build importer
+# 4) Seed the database
+docker compose run --rm importer --update
+docker compose run --rm importer    # imports the current movie list
 
-# Prepare the template database (creates mediathek_1_template)
-docker-compose run --rm importer --update
-
-# Run the first full conversion
-docker-compose run --rm importer
+# 5) Launch API + importer cron service
+docker compose up -d api importer
 ```
 
-Importer configuration is stored in `config/importer/`. By default the
-`pw_mariadb` file uses the MariaDB root account (`root:example-root`) so that
-schemas such as `mediathek_1_tmp1` and `mediathek_1` can be created. For a
-production deployment you should switch to a dedicated account with the proper
-permissions.
+Directory hints:
 
-All intermediate artifacts (movie lists, unpacked JSON files, …) land in
-`data/importer/` and are `.gitignore`d.
+- `config/importer/` → importer config (`mv2mariadb.conf`, `pw_mariadb`)
+- `data/importer/` → downloaded film lists (safe to delete)
+- `config/api/sqlpasswd` → API DB credentials copied to `/opt/api/data/.passwd`
 
-Subsequent importer runs update the existing database and currently take about
-80 seconds on modern hardware for ~685k entries.
+### Verifying & configuring the plugin
 
-### API Container
+*Check status*:
 
 ```bash
-# Build the API image
-docker-compose build api
-
-# Start the API service (host port 18080 -> container 8080)
-docker-compose up -d api
-
-# Quick check
 curl http://localhost:18080/mt-api?mode=api&sub=info
 ```
 
-On the first start the API container copies static assets from `/opt/api.dist`
-into the persistent `api_data` and `api_log` volumes (see `docker-compose.yml`).
-Custom database credentials can be placed in `config/api/sqlpasswd`; the
-entrypoint copies the file to `/opt/api/data/.passwd`. HTTP responses now carry
-plain JSON (no URL encoding), which makes inspection via `curl` or browser
-devtools straightforward.
+You should see JSON with database stats. If the importer is running in cron
+mode it refreshes the database roughly every two hours (change
+`--cron-mode 120` if needed).
 
-### Automated Smoke Test
+*Use it from Neutrino*: set the plugin base URL to
+`http://<host>:18080/mt-api`. The plugin will immediately pick up the locally
+populated catalogue.
+
+---
+
+## Daily operation
+
+### Named volumes
+
+The compose file and quickstart script create descriptive volumes so you can
+back them up or inspect them easily:
+
+| Volume name                         | Path in container              | Purpose                    |
+|------------------------------------|--------------------------------|----------------------------|
+| `mediathek-backend_mariadb`        | `/var/lib/mysql`               | MariaDB tables             |
+| `mediathek-backend_db-import`      | `/opt/importer/bin/dl`         | Cached film lists          |
+| `mediathek-backend_mt-api-data`    | `/opt/api/data`                | API data + passwd file     |
+| `mediathek-backend_mt-api-log`     | `/opt/api/log`                 | API access/error logs      |
+
+### Updating containers
+
+Pull the desired tag (or `latest`) and restart the container. Example for the
+importer:
 
 ```bash
-make smoke
+IMAGE_TAG=v0.2.6-0-ga1b2c3d   # or 'latest'
+
+docker pull dbt1/mediathek-importer:${IMAGE_TAG}
+docker stop mediathek-importer && docker rm mediathek-importer
+docker run -d --name mediathek-importer \
+  --network mediathek-net \
+  -v "$PWD/config/importer:/opt/importer/config" \
+  -v mediathek-backend_db-import:/opt/importer/bin/dl \
+  dbt1/mediathek-importer:${IMAGE_TAG} \
+  --cron-mode 120 --cron-mode-echo
 ```
 
-The smoke test builds both images, boots MariaDB+API, executes the importer
-(including the template update) and finally uses `curl` to request
-`mode=api&sub=info`. The compose stack is cleaned up automatically afterwards.
+Repeat the same steps for `dbt1/mt-api-dev:${API_TAG}` (mount the two API
+volumes plus `config/api`).
 
-### Wiring the Neutrino Plugin
+### Scheduling the importer yourself
 
-Once importer and API have finished, the API exposes the same endpoints the
-Neutrino Mediathek plugin expects. For local tests simply set the plugin base
-URL to `http://localhost:18080/mt-api` (or the host's IP). The plugin will then
-receive fresh data from the locally populated database.
-
-## Manually building & pushing Docker images
-
-Automated Docker builds are currently disabled. To publish new images yourself,
-build them locally with both the explicit version tag and `latest`. The version
-numbers come straight from the upstream repositories:
-
-Importer (`dbt1/mediathek-importer`, version read from `vendor/db-import/VERSION`;
-run from the repository root):
+If you prefer cron/systemd on the host:
 
 ```bash
-IMPORTER_VERSION=$(grep -Po '(?<=VERSION=")[^"]+' vendor/db-import/VERSION)
+0 * * * * docker run --rm --network mediathek-net \
+  -v "$PWD/config/importer:/opt/importer/config" \
+  -v mediathek-backend_db-import:/opt/importer/bin/dl \
+  dbt1/mediathek-importer:latest
+```
+
+This launches a one-shot importer once per hour.
+
+---
+
+## Building & publishing Docker images
+
+Automated publishing is disabled by default. To release a new version manually
+you only need the backend repo with its vendor checkouts.
+
+```bash
+cd mediathek-backend
+make vendor   # refresh vendor repos if necessary
+
+# Derive tag+commit-count strings
+IMPORTER_VERSION=$(git -C vendor/db-import describe --tags --long --abbrev=7)
+API_VERSION=$(git -C vendor/mt-api-dev describe --tags --long --abbrev=7)
+
+# Build multi-arch importer image
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t dbt1/mediathek-importer:${IMPORTER_VERSION} \
   -t dbt1/mediathek-importer:latest \
   -f docker/importer/Dockerfile \
   --push .
-```
 
-API (`dbt1/mt-api-dev`, version via Git tag; also from the repository root):
-
-```bash
-API_VERSION=$(git -C vendor/mt-api-dev describe --tags --abbrev=0)
+# Build multi-arch API image
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t dbt1/mt-api-dev:${API_VERSION} \
   -t dbt1/mt-api-dev:latest \
@@ -135,38 +204,41 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   --push .
 ```
 
-This ensures the Docker Hub always carries both the exact release tag and `latest`.
+You can also trigger the GitHub workflow
+[`Build Docker Images`](.github/workflows/docker-images.yml) manually. It checks
+out the repo, runs `make vendor`, reads the tags using the same `git describe`
+logic and pushes both images.
 
-### Updating a running setup
+---
 
-Once the new image is published, refresh your containers either to `latest` or a
-specific tag. Example for the importer:
+## Repository layout & developer notes
+
+- `docker/` – Dockerfiles + entrypoints. The importer image compiles
+  `mv2mariadb`; the API image builds `mt-api` and copies assets into
+  `/opt/api.dist`.
+- `config/` / `data/` – host-side directories bind-mounted into the containers.
+- `Makefile` – helper targets (`make vendor`, `make smoke`).
+- `docs/` – scratchpad for future architecture notes.
+
+Handy commands for contributors:
 
 ```bash
-# choose the desired tag
-IMAGE_TAG=0.2.4    # or 'latest'
-
-docker pull dbt1/mediathek-importer:${IMAGE_TAG}
-docker stop mediathek-importer && docker rm mediathek-importer
-docker run -d --name mediathek-importer \
-  --network mediathek-net \
-  -v "$PWD/config/importer:/opt/importer/config" \
-  -v "$PWD/data/importer:/opt/importer/data" \
-  dbt1/mediathek-importer:${IMAGE_TAG}
+make vendor        # clone/refresh vendor repos
+make smoke         # run importer + API once and hit /mt-api?mode=api&sub=info
+docker compose logs -f importer api db
 ```
 
-Do the same for the API container (`dbt1/mt-api-dev:${API_TAG}`), adjusting the
-network/volume settings to your environment.
+---
 
-## Open Tasks
+## Where to find more details
 
-- Harden the API stack: HTTPS/reverse proxy, optional auth, health checks for
-  the FastCGI worker.
-- Automation: cron-like importer execution via Compose or GitHub Actions and
-  publication of the generated dumps/JSON feeds.
-- Security hardening: run the database with a dedicated user and manage secrets
-  via environment/secret files.
-- End-to-end smoke test that exercises the Neutrino plugin against the local
-  API.
+- **Importer specific docs** – [`vendor/db-import/README.en.md`](vendor/db-import/README.en.md)
+  (build flags, CLI options, data format).
+- **API specific docs** – [`vendor/mt-api-dev/README.en.md`](vendor/mt-api-dev/README.en.md)
+  (FastCGI endpoints, configuration variables).
+- **Quickstart script** – described inside
+  [`vendor/mt-api-dev/scripts/quickstart.sh`](vendor/mt-api-dev/scripts/quickstart.sh)
+  and referenced above.
 
-Feedback is welcome!
+If you update any operational detail, please edit this README first so users
+have a single up-to-date entry point.

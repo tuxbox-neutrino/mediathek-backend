@@ -97,7 +97,7 @@ docker compose build importer api
 
 # 4) Seed the database
 docker compose run --rm importer --update
-docker compose run --rm importer    # imports the current movie list
+docker compose run --rm importer --force-convert   # force the initial import
 
 # 5) Launch the API
 docker compose up -d api

@@ -29,8 +29,13 @@ cp "${PASSWORD_SOURCE}" "${PASSWORD_TARGET}"
 export HOME="${IMPORTER_HOME}"
 cd "${BIN_DIR}"
 
+# Do not force a conversion here. With --force-convert wired in, every run
+# that passes the --cron-mode block rebuilds the whole database including its
+# indexes, even when the film list has not changed at all - roughly 90 seconds
+# of pure write load per run for no new data. Callers that genuinely want an
+# unconditional import pass --force-convert themselves.
 set +e
-./mv2mariadb --force-convert "$@"
+./mv2mariadb "$@"
 status=$?
 set -e
 

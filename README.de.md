@@ -85,7 +85,7 @@ make vendor
 docker compose up -d db                 # MariaDB (Volume: mediathek-backend_db_data)
 docker compose build importer api       # Images aus den aktuellen Quellen
 docker compose run --rm importer --update
-docker compose run --rm importer        # kompletten Import durchführen
+docker compose run --rm importer --force-convert   # kompletten Import erzwingen
 docker compose up -d api                # API starten
 ```
 

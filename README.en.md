@@ -67,7 +67,8 @@ The helper will:
 3. Ask for DB credentials (defaults `root/example-root` for tests).
 4. Create config files in `config/importer/` and `config/api/`.
 5. Run the importer twice (`--update`, `--force-convert`).
-6. Launch long-running importer (`--cron-mode`) and API containers.
+6. Launch the long-running API container and print the cron entry for the
+   importer (which runs once and exits, rather than staying up).
 
 The script prints the URL of the API (`http://localhost:18080/mt-api`) at the
 end. To stop/remove everything later:
@@ -98,9 +99,16 @@ docker compose build importer api
 docker compose run --rm importer --update
 docker compose run --rm importer    # imports the current movie list
 
-# 5) Launch API + importer cron service
-docker compose up -d api importer
+# 5) Launch the API
+docker compose up -d api
 ```
+
+> **The importer is not a service.** It imports once and exits — `Exited (0)`
+> is the expected state, not a failure. For recurring imports set up a cron
+> entry, see *Scheduling the importer yourself*. Do **not** add a `--restart`
+> policy: it does not replace cron, it restarts the container endlessly —
+> roughly once a minute once Docker's backoff caps out, and permanently
+> visible as `Restarting (0)` in `docker ps`.
 
 Directory hints:
 
@@ -116,9 +124,9 @@ Directory hints:
 curl http://localhost:18080/mt-api?mode=api&sub=info
 ```
 
-You should see JSON with database stats. If the importer is running in cron
-mode it refreshes the database roughly every two hours (change
-`--cron-mode 120` if needed).
+You should see JSON with database stats. Once the cron entry is in place, the
+database is refreshed at most every two hours (change `--cron-mode 120` if
+needed).
 
 *Use it from Neutrino*: set the plugin base URL to
 `http://<host>:18080/mt-api`. The plugin will immediately pick up the locally
@@ -142,16 +150,20 @@ back them up or inspect them easily:
 
 ### Updating containers
 
-Pull the desired tag (or `latest`) and restart the container. Example for the
-importer:
+Pull the desired tag (or `latest`). Example for the importer:
 
 ```bash
 IMAGE_TAG=v0.2.6-0-ga1b2c3d   # or 'latest'
 
 docker pull dbt1/mediathek-importer:${IMAGE_TAG}
-docker stop mediathek-importer && docker rm mediathek-importer
-docker run -d --name mediathek-importer \
-  --network mediathek-net \
+```
+
+There is no long-running importer container to replace — the next cron run
+picks up the freshly pulled image on its own. To test it right away, trigger a
+single run:
+
+```bash
+docker run --rm --network mediathek-net \
   -v "$PWD/config/importer:/opt/importer/config" \
   -v mediathek-backend_db-import:/opt/importer/bin/dl \
   dbt1/mediathek-importer:${IMAGE_TAG} \
@@ -159,7 +171,8 @@ docker run -d --name mediathek-importer \
 ```
 
 Repeat the same steps for `dbt1/mt-api-dev:${API_TAG}` (mount the two API
-volumes plus `config/api`).
+volumes plus `config/api`). The API *is* a real service and needs restarting
+after a pull.
 
 ### Scheduling the importer yourself
 
@@ -167,12 +180,17 @@ If you prefer cron/systemd on the host:
 
 ```bash
 0 * * * * docker run --rm --network mediathek-net \
-  -v "$PWD/config/importer:/opt/importer/config" \
+  -v /path/to/config/importer:/opt/importer/config \
   -v mediathek-backend_db-import:/opt/importer/bin/dl \
-  dbt1/mediathek-importer:latest
+  dbt1/mediathek-importer:latest \
+  --cron-mode 120 --cron-mode-echo
 ```
 
-This launches a one-shot importer once per hour.
+Cron sets the pace, `--cron-mode` caps it: the hourly invocation only downloads
+if the last import is at least 120 minutes old, otherwise the container exits
+without importing. Without `--cron-mode` every single run re-imports the full
+film list. Note that crontab has no `$PWD`, so the config path must be
+absolute.
 
 ---
 

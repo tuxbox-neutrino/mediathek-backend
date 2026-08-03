@@ -64,7 +64,8 @@ Das Skript erledigt:
 3. Abfrage bzw. Setzen der Zugangsdaten (Standard: `root/example-root`).
 4. Schreiben der Konfigurationsdateien in `config/importer/` und `config/api/`.
 5. Zwei Importläufe (`--update`, `--force-convert`).
-6. Start der Dauerläufer `mediathek-importer` und `mediathek-api`.
+6. Start des Dienstes `mediathek-api` und Ausgabe der Cron-Zeile für den
+   Importer (der läuft einmalig, nicht dauerhaft).
 
 Am Ende erscheint die URL `http://localhost:18080/mt-api`. Stoppen lässt sich
 alles mit:
@@ -85,8 +86,15 @@ docker compose up -d db                 # MariaDB (Volume: mediathek-backend_db_
 docker compose build importer api       # Images aus den aktuellen Quellen
 docker compose run --rm importer --update
 docker compose run --rm importer        # kompletten Import durchführen
-docker compose up -d api importer       # API + Cron-Importer starten
+docker compose up -d api                # API starten
 ```
+
+> **Der Importer ist kein Dienst.** Er importiert einmal und beendet sich
+> (`Exited (0)` ist der erwartete Zustand, kein Fehler). Für wiederkehrende
+> Importe richte einen Cron-Eintrag ein, siehe *Importer selbst schedulen*.
+> Setze **keine** `--restart`-Policy: Sie ersetzt keinen Cron, sondern startet
+> den Container endlos neu — mit Docker-Backoff etwa im Minutentakt, dauerhaft
+> als `Restarting (0)` in `docker ps` sichtbar.
 
 Wichtige Pfade:
 
@@ -124,9 +132,14 @@ liest das Plugin automatisch die lokale Datenbank.
 IMAGE_TAG=v0.2.6-0-ga1b2c3d   # oder 'latest'
 
 docker pull dbt1/mediathek-importer:${IMAGE_TAG}
-docker stop mediathek-importer && docker rm mediathek-importer
-docker run -d --name mediathek-importer \
-  --network mediathek-net \
+```
+
+Ein dauerhafter Importer-Container entfällt — der nächste Cron-Lauf nutzt
+automatisch das frisch geholte Image. Sofort testen lässt sich das mit einem
+einmaligen Lauf:
+
+```bash
+docker run --rm --network mediathek-net \
   -v "$PWD/config/importer:/opt/importer/config" \
   -v mediathek-backend_db-import:/opt/importer/bin/dl \
   dbt1/mediathek-importer:${IMAGE_TAG} \
@@ -134,16 +147,23 @@ docker run -d --name mediathek-importer \
 ```
 
 Für die API entsprechend (`dbt1/mt-api-dev:${API_TAG}`) zwei Volumes plus
-`config/api` mounten.
+`config/api` mounten. Die API ist ein echter Dienst und läuft dauerhaft.
 
 ### Importer selbst schedulen
 
 ```bash
 0 * * * * docker run --rm --network mediathek-net \
-  -v "$PWD/config/importer:/opt/importer/config" \
+  -v /pfad/zu/config/importer:/opt/importer/config \
   -v mediathek-backend_db-import:/opt/importer/bin/dl \
-  dbt1/mediathek-importer:latest
+  dbt1/mediathek-importer:latest \
+  --cron-mode 120 --cron-mode-echo
 ```
+
+Cron gibt den Takt vor, `--cron-mode` begrenzt ihn: Der stündliche Aufruf lädt
+nur dann wirklich, wenn der letzte Download mindestens 120 Minuten zurückliegt
+— sonst beendet sich der Container ohne Import. Ohne `--cron-mode` importiert
+jeder Lauf die vollständige Filmliste neu. In der Crontab muss der Pfad zur
+Konfiguration absolut stehen, `$PWD` ist dort nicht gesetzt.
 
 ---
 

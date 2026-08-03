@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="0.2.0"
+SCRIPT_VERSION="0.3.0"
 
 if [[ "${1:-}" == "--version" ]]; then
   echo "quickstart.sh version ${SCRIPT_VERSION}"

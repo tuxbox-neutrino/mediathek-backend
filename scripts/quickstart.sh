@@ -304,13 +304,11 @@ if [[ "${seed_success}" -ne 1 ]]; then
   exit 1
 fi
 
+# The importer is a one-shot: it imports and exits. Keeping it alive as a
+# service schedules nothing - a restart policy would just start it again
+# back to back. Recurring imports belong in cron; the ready-made entry is
+# printed at the end of this script.
 docker rm -f mediathek-importer >/dev/null 2>&1 || true
-docker run -d --name mediathek-importer \
-  -v "${CONFIG_DIR}:/opt/importer/config" \
-  -v "${DATA_DIR}:/opt/importer/bin/dl" \
-  "${IMPORTER_NET_ARGS[@]}" \
-  --restart unless-stopped \
-  dbt1/mediathek-importer --cron-mode 120 --cron-mode-echo
 
 docker rm -f mediathek-api >/dev/null 2>&1 || true
 docker run -d --name mediathek-api \
@@ -323,9 +321,18 @@ docker run -d --name mediathek-api \
   --restart unless-stopped \
   dbt1/mt-api-dev:latest
 
-echo "[quickstart] Setup complete. Importer + API are running."
+echo "[quickstart] Setup complete. The API is running and the database is populated."
 if [[ "${NETWORK_MODE}" == "host" ]]; then
   echo "[quickstart] Access the API via http://localhost:8080/mt-api?mode=api&sub=info"
 else
   echo "[quickstart] Access the API via http://localhost:${API_PORT}/mt-api?mode=api&sub=info"
 fi
+
+echo
+echo "[quickstart] One step is left: schedule the importer."
+echo "[quickstart] It is a one-shot and is deliberately not left running."
+echo "[quickstart] Add this to your crontab - it runs hourly, but only"
+echo "[quickstart] downloads if the last import is at least 2 hours old:"
+echo
+echo "  0 * * * * docker run --rm -v ${CONFIG_DIR}:/opt/importer/config -v ${DATA_DIR}:/opt/importer/bin/dl ${IMPORTER_NET_ARGS[*]:-} dbt1/mediathek-importer --cron-mode 120 --cron-mode-echo"
+echo
